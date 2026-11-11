@@ -26,7 +26,9 @@ The generator reads `RESPAN_API_KEY` from the environment, `video/.env` or the r
 
 ## 3. Write the brief
 
-Write `video/prompts/<id>.md`, where `<id>` is a short lowercase slug. `video/prompts/skillswap-promo.md` shows the format and the level of detail: front matter with `width`, `height` and `fps`; an overview with audience, tone, brand colours and one continuity idea that carries across every cut; then one `## Scene: Name (4s)` section per animation.
+Read `references/smooth-2d-saas.md` (next to this file) before you write anything. It is the house style: a frame-by-frame reading of the reference clip the project owner chose, with the rules that make it feel smooth. Follow its motion, never its content.
+
+Write `video/prompts/<id>.md`, where `<id>` is a short lowercase slug. `video/prompts/skillswap-30.md` is the fullest example of the house style and `video/prompts/skillswap-promo.md` a lighter one. Both show the format and the level of detail: front matter with `width`, `height` and `fps`; an overview with audience, tone, brand colours and one continuity idea that carries across every cut; then one `## Scene: Name (4s)` section per animation.
 
 Each scene is sent to the generator on its own, with the overview and its neighbours for context, so each scene section has to stand alone. For every scene, state:
 
@@ -46,7 +48,9 @@ npm run generate -- prompts/<id>.md
 
 Each scene is one request to `gemini-4-carbon`. Scenes already written are kept, so after a failure run the same command again to pick up where it stopped.
 
-If the gateway answers `401 activation_required`, the Respan workspace has no credits. Stop, and tell the user to add credits at https://platform.respan.ai/platform/settings/workspace/billing. Do not switch to another generator or write the scenes yourself to get around it.
+If the gateway answers `401 activation_required`, the Respan workspace has no credits. Stop, and tell the user to add credits at https://platform.respan.ai/platform/settings/workspace/billing. Do not quietly switch to another generator.
+
+If the user asks for the video anyway, write the scenes yourself from the brief. Keep to the scene contract in `video/scripts/system-prompt.md` (one self-contained file per scene in `src/videos/<id>/scenes/`, imports from `remotion` and `react` only), then run the generate command once more: with every scene present it makes no request and only assembles `index.tsx`. Say plainly, in your report and in any queue note, that Claude Code wrote the scenes and Gemini did not. `npm run generate -- prompts/<id>.md --force` regenerates them with Gemini once there are credits.
 
 ## 5. Check and review
 
@@ -83,6 +87,17 @@ npx -y @respan/cli logs list --limit 10 --all-envs true --json
 ```
 
 Commit the brief and the generated scenes if the user wants the video kept in the repo; `out/` is ignored.
+
+## Remocn's own plugin
+
+Remocn publishes a Claude Code plugin with its component library and a `/remocn:video` flow. It is optional and the user installs it themselves:
+
+```bash
+claude plugin marketplace add Remocn/remocn
+claude plugin install remocn@remocn
+```
+
+If its skills are available and the user asks for Remocn components, load `remocn:remocn` and follow it. Scenes written through this skill's generator stay self-contained and do not import those components.
 
 ## Queue
 

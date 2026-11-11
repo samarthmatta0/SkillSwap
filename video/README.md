@@ -34,6 +34,9 @@ A brief is a Markdown file in `prompts/`. `prompts/skillswap-promo.md` is the ex
 - Optional front matter with `width`, `height` and `fps` (default 1920x1080 at 30).
 - Text for the whole video: audience, tone, brand colours, and one continuity idea that carries across the cuts.
 - One section per animation, headed `## Scene: Name (4s)`. Say what is on screen, when each thing moves, how far and how fast, what holds still, and how the scene hands off to the next.
+- Optionally a `## Sound` table and a `## Assets` table before the scenes. Sound is a cue sheet (`At (s)`, `File`, `Volume`, `Length (s)`, `Marks`) that is placed over the finished film; a cue with a length is a bed that is cut to that length and faded. Assets lists the files a scene may load (`File`, `What it is`). Paths are relative to `public/<id>/`, and the generator stops if a listed file is missing.
+
+A video starts with a low-fidelity moodboard in `boards/<id>.md`, which settles the look, the rough frames and the sound before the brief is written. `boards/skillswap-30.md`, `prompts/skillswap-30.md` and `public/skillswap-30/` are a complete example, with sources and licences in `public/skillswap-30/ASSETS.md`.
 
 ## Generate a video
 

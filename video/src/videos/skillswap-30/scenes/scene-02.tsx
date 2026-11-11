@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { AbsoluteFill, Easing, interpolate, interpolateColors, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Easing, Img, interpolate, interpolateColors, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 
 const FONT = "'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif";
 const ARRIVE = Easing.bezier(0.33, 1, 0.68, 1);
@@ -30,8 +30,16 @@ const TRADES = [
 const PILLS_LEAVE = 3.68;
 const COLUMNS = [-420, 0, 420];
 const ROW = 170;
-const TOP = ["Guitar", "React", "Cooking"];
-const BOTTOM = ["Spanish", "Photography", "Yoga"];
+const TOP = [
+  { icon: "guitar", label: "Guitar" },
+  { icon: "code-xml", label: "React" },
+  { icon: "chef-hat", label: "Cooking" },
+];
+const BOTTOM = [
+  { icon: "languages", label: "Spanish" },
+  { icon: "camera", label: "Photography" },
+  { icon: "person-standing", label: "Yoga" },
+];
 
 export default function Scene() {
   const frame = useCurrentFrame();
@@ -54,7 +62,7 @@ export default function Scene() {
   const scale = 1 + (GROWN - 1) * glide;
   const leave = at(t, PILLS_LEAVE, 0.3, LEAVE);
 
-  const pill = (label: string, column: number, top: boolean, order: number) => {
+  const pill = ({ icon, label }: { icon: string; label: string }, column: number, top: boolean, order: number) => {
     const start = PILLS_START + order * PILL_STAGGER;
     const trade = TRADES.find((entry) => entry.column === column);
     const travel = trade === undefined ? 0 : at(t, trade.start, TRADE, MOVE);
@@ -73,15 +81,17 @@ export default function Scene() {
           borderRadius: 999,
           display: "flex",
           fontSize: 40 * u,
+          gap: 14 * u,
           height: 76 * u,
           left: "50%",
           opacity: at(t, start, 0.2) * (1 - leave),
-          padding: `0 ${34 * u}px`,
+          padding: `0 ${34 * u}px 0 ${26 * u}px`,
           position: "absolute",
           top: "50%",
           transform: `translate(-50%, -50%) translate(${x * u}px, ${y * u}px) scale(${grow * (1 - 0.1 * leave)})`,
         }}
       >
+        <Img height={36 * u} src={staticFile(`skillswap-30/icons/${icon}.svg`)} width={36 * u} />
         {label}
       </div>
     );
@@ -122,8 +132,8 @@ export default function Scene() {
         swap
         <span style={{ left: "100%", opacity: 1 - at(t, GLIDE_START, 0.3), position: "absolute" }}>?</span>
       </span>
-      {TOP.map((label, column) => pill(label, column, true, column))}
-      {BOTTOM.map((label, column) => pill(label, column, false, column + 3))}
+      {TOP.map((entry, column) => pill(entry, column, true, column))}
+      {BOTTOM.map((entry, column) => pill(entry, column, false, column + 3))}
     </AbsoluteFill>
   );
 }

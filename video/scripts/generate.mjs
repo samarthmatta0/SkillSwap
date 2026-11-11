@@ -240,14 +240,56 @@ export function parseBrief(text) {
     };
   });
 
-  return { ...format, overview: body.slice(0, marks[0].index).trim(), scenes };
+  const overview = body.slice(0, marks[0].index).trim();
+  return { ...format, overview, scenes, sound: parseSound(overview), assets: parseAssets(overview) };
+}
+
+// The rows of the table under a "## Title" heading in the overview, as trimmed cells.
+function tableRows(overview, title) {
+  const start = new RegExp(`^##[ \\t]+${title}[ \\t]*$`, "im").exec(overview);
+  if (start === null) {
+    return [];
+  }
+  const rest = overview.slice(start.index + start[0].length);
+  const next = /^##[ \t]+/m.exec(rest);
+  return (next === null ? rest : rest.slice(0, next.index))
+    .split("\n")
+    .filter((line) => /^\s*\|/.test(line) && !/^\s*\|[\s:|-]+$/.test(line))
+    .map((line) => line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim().replace(/^`|`$/g, "")));
+}
+
+const safeFile = (file) => /^[A-Za-z0-9][A-Za-z0-9._/-]*\.[A-Za-z0-9]+$/.test(file) && !file.includes("..");
+
+// "## Sound" is a cue sheet: | At (s) | File | Volume | Length (s) | Marks |.
+// A cue with a length is a bed: it is cut to that length and faded in and out.
+export function parseSound(overview) {
+  return tableRows(overview, "Sound")
+    .filter((cells) => /^\d+(\.\d+)?$/.test(cells[0] ?? ""))
+    .map((cells) => {
+      const [at, file, volume, length] = cells;
+      if (!safeFile(file ?? "")) {
+        throw new Error(`the Sound table names "${file}", which is not a plain file path`);
+      }
+      const level = Number(volume);
+      if (!(level > 0 && level <= 1)) {
+        throw new Error(`the Sound table gives ${file} a volume of "${volume}"; use a number above 0 and up to 1`);
+      }
+      return { at: Number(at), file, volume: level, length: /^\d+(\.\d+)?$/.test(length ?? "") ? Number(length) : null };
+    });
+}
+
+// "## Assets" lists the files a scene may load: | File | What it is | ... |.
+export function parseAssets(overview) {
+  return tableRows(overview, "Assets")
+    .filter((cells) => safeFile(cells[0] ?? ""))
+    .map(([file, what = ""]) => ({ file, what }));
 }
 
 export const sceneFile = (index) => `scene-${String(index + 1).padStart(2, "0")}.tsx`;
 
 // The model sees the whole plan but is asked for one scene, so each animation
 // gets its own prompt and can be revised on its own.
-export function buildMessages({ system, brief, index, current = null, notes = null }) {
+export function buildMessages({ system, brief, index, id = "video", current = null, notes = null }) {
   const scene = brief.scenes[index];
   const outline = brief.scenes
     .map((s, i) => `${i + 1}. ${s.name} (${s.seconds} s)`)
@@ -256,9 +298,14 @@ export function buildMessages({ system, brief, index, current = null, notes = nu
     brief.scenes[i] === undefined
       ? ""
       : `\n\n## ${label}, for continuity only. Do not draw it.\n\n${brief.scenes[i].name}: ${brief.scenes[i].text}`;
+  const assets = brief.assets.length === 0
+    ? ""
+    : `\n\n# Assets you may use\n\nLoad a file with \`staticFile("${id}/<file>")\`. These are the only files that exist.\n\n${brief.assets
+        .map((asset) => `- \`${asset.file}\`: ${asset.what}`)
+        .join("\n")}`;
   const ask = `# The video
 
-${brief.overview}
+${brief.overview}${assets}
 
 Frame: ${brief.width}x${brief.height} at ${brief.fps} fps.
 
@@ -288,11 +335,25 @@ ${scene.text}${neighbour(index - 1, "The scene before")}${neighbour(index + 1, "
   return messages;
 }
 
-export function assembleIndex(brief, source) {
+export function assembleIndex(brief, source, id = "video") {
   const names = brief.scenes.map((_, i) => `Scene${String(i + 1).padStart(2, "0")}`);
   const total = brief.scenes.reduce((sum, scene) => sum + scene.frames, 0);
+  const frames = (seconds) => Math.round(seconds * brief.fps);
+  const cues = brief.sound
+    .map((cue) => {
+      const src = `staticFile("${id}/${cue.file}")`;
+      if (cue.length === null) {
+        return `      <Sequence from={${frames(cue.at)}} layout="none">\n        <Audio src={${src}} volume={${cue.volume}} />\n      </Sequence>`;
+      }
+      const length = frames(cue.length);
+      const fadeIn = Math.min(frames(0.5), Math.floor(length / 4));
+      const fadeOut = Math.min(frames(1.5), Math.floor(length / 4));
+      return `      <Sequence durationInFrames={${length}} from={${frames(cue.at)}} layout="none">\n        <Audio src={${src}} volume={(f) => ${cue.volume} * Math.max(0, Math.min(1, f / ${fadeIn}, (${length} - f) / ${fadeOut}))} />\n      </Sequence>`;
+    })
+    .join("\n");
+  const imports = brief.sound.length === 0 ? "AbsoluteFill, Series" : "AbsoluteFill, Audio, Sequence, Series, staticFile";
   return `// Assembled by scripts/generate.mjs from ${source}. Running it again rewrites this file.
-import { AbsoluteFill, Series } from "remotion";
+import { ${imports} } from "remotion";
 ${names.map((name, i) => `import ${name} from "./scenes/${sceneFile(i).replace(/\.tsx$/, "")}";`).join("\n")}
 
 export const meta = { durationInFrames: ${total}, fps: ${brief.fps}, height: ${brief.height}, width: ${brief.width} };
@@ -304,7 +365,7 @@ export default function Video() {
 ${brief.scenes
   .map((scene, i) => `        <Series.Sequence durationInFrames={${scene.frames}}>\n          <${names[i]} />\n        </Series.Sequence>`)
   .join("\n")}
-      </Series>
+      </Series>${cues === "" ? "" : `\n${cues}`}
     </AbsoluteFill>
   );
 }
@@ -382,6 +443,18 @@ async function main() {
   const model = values.model ?? (await setting("RESPAN_MODEL", envFiles)) ?? DEFAULT_MODEL;
   const system = await readFile(join(HERE, "system-prompt.md"), "utf8");
 
+  const missingFiles = [];
+  for (const file of [...brief.sound, ...brief.assets].map((entry) => entry.file)) {
+    if (!(await exists(join(PROJECT, "public", id, file)))) {
+      missingFiles.push(file);
+    }
+  }
+  if (missingFiles.length > 0) {
+    throw new Error(
+      `the brief lists files that are not in public/${id}/:\n${[...new Set(missingFiles)].map((f) => `  - ${f}`).join("\n")}\nGather them first, or take them out of the Sound and Assets tables.`
+    );
+  }
+
   const folder = join(PROJECT, "src", "videos", id);
   const sceneDir = join(folder, "scenes");
 
@@ -412,6 +485,7 @@ async function main() {
         system,
         brief,
         index,
+        id,
         current: values.revise === undefined ? null : await readFile(target, "utf8"),
         notes: values.revise ?? null,
       }),
@@ -447,7 +521,7 @@ async function main() {
     return;
   }
 
-  await writeFile(join(folder, "index.tsx"), assembleIndex(brief, `prompts/${basename(briefPath)}`), "utf8");
+  await writeFile(join(folder, "index.tsx"), assembleIndex(brief, `prompts/${basename(briefPath)}`, id), "utf8");
   process.stdout.write(
     `\n${written} scene${written === 1 ? "" : "s"} written. Assembled ${join(folder, "index.tsx")}\n\nNext:\n  npm run check\n  npm run studio            # or open this folder in Remocn Studio\n  npm run render -- ${id} out/${id}.mp4\n`
   );

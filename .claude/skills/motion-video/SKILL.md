@@ -9,6 +9,8 @@ You are the prompter and the reviewer. A second model, `gemini-4-carbon` on the 
 
 Everything lives in `video/`, a standalone Remotion project. `video/README.md` explains the commands.
 
+Always work in this order, and finish each stage before starting the next: take the request, make the moodboard, map every scene, gather the assets, generate, review, render. The project owner asked for this order so that the generator knows what it is making before it writes any animation. `video/boards/skillswap-30.md`, `video/prompts/skillswap-30.md` and `video/public/skillswap-30/` are a complete worked example.
+
 ## 1. Take the request
 
 The request is either a message in the conversation or a job from the Motion Booth queue (see "Queue" below). Collect what the video is for, who watches it, the product's real copy, colours and name, the frame shape and the length.
@@ -24,9 +26,22 @@ cd video
 
 The generator reads `RESPAN_API_KEY` from the environment, `video/.env` or the repo root `.env`. Never print the key, and never commit a file that holds it.
 
-## 3. Write the brief
+## 3. Make the moodboard
 
-Read `references/smooth-2d-saas.md` (next to this file) before you write anything. It is the house style: a frame-by-frame reading of the reference clip the project owner chose, with the rules that make it feel smooth. Follow its motion, never its content.
+Read `references/smooth-2d-saas.md` (next to this file) first. It is the house style: a frame-by-frame reading of the reference clip the project owner chose, with the rules that make it feel smooth. Follow its motion, never its content.
+
+Then write `video/boards/<id>.md`. Keep it low fidelity: it settles direction, not detail. It holds:
+
+- **Feeling.** Two or three sentences on what the film should feel like.
+- **Reference.** What is taken from the reference and what is not.
+- **Look.** Backdrop, type, colours, surfaces and icon style, as a short table.
+- **Rough frames.** One row per beat: its time, what the frame holds at rest, and what survives into the next beat. Words and boxes are enough.
+- **Sound.** The music (what it is, where it enters, how loud, how it ends) and every sound effect, each tied to something the eye sees and with a reason for being there. Sound is planned here, before any animation, so the motion can be timed to it.
+- **Open questions.** Anything you could not verify, such as a mix nobody has listened to.
+
+A creative film needs an idea, not only effects. Before listing frames, find the one visual idea that belongs to this product, the way trading places is SkillSwap's, and let it recur: in the type, in the interface pieces, in the mark, in the sound.
+
+## 4. Map every scene
 
 Write `video/prompts/<id>.md`, where `<id>` is a short lowercase slug. `video/prompts/skillswap-30.md` is the fullest example of the house style and `video/prompts/skillswap-promo.md` a lighter one. Both show the format and the level of detail: front matter with `width`, `height` and `fps`; an overview with audience, tone, brand colours and one continuity idea that carries across every cut; then one `## Scene: Name (4s)` section per animation.
 
@@ -38,9 +53,33 @@ Each scene is sent to the generator on its own, with the overview and its neighb
 - What holds still and for how long, so the text can be read: at least 0.3 s per word after it lands, and never under 1.2 s.
 - The first frame, which must follow from the previous scene's last frame, and the last frame, which the next scene opens from.
 
+Each scene reads as frame notes from its first frame to its last: a list of timed lines that leaves no interval undescribed, ending with a line that begins "Last frame:".
+
+Before the scenes, the brief carries two tables the generator reads:
+
+- `## Sound`: the moodboard's sound plan as a cue sheet with exact times. Columns: `At (s)`, `File`, `Volume` (above 0, up to 1), `Length (s)` (only for a bed such as music, which is then cut to that length and faded), `Marks`. The cues are placed when the scenes are joined, so every cue's time must match the moment it marks in a scene.
+- `## Assets`: the files scenes may load, each with a one-line description. Columns: `File`, `What it is`.
+
+File paths in both tables are relative to `video/public/<id>/`.
+
 Smoothness is decided here. Budget entrance, reading and exit so they fit the scene's length, keep one focal element at a time, keep travel distances small unless the move is the point, and stagger groups by 2 to 5 frames. For a SaaS video, show the product: describe interface pieces (cards, inputs, lists, charts) with their real labels rather than abstract decoration. Most videos want 4 to 7 scenes of 3 to 6 seconds.
 
-## 4. Generate
+## 5. Gather the assets
+
+Collect what the moodboard and the scene map call for into `video/public/<id>/`: icons, images, footage, music and sound effects. The generator refuses to run while a file named in the brief is missing.
+
+Use only material whose licence allows it, and download it from a place that offers the download:
+
+- Icons: open sets such as Lucide (`lucide-static` on npm). Recolour line icons to the film's colour when you copy them.
+- Sound effects: Remotion's `@remotion/sfx` files, or CC0 libraries.
+- Music: tracks under CC0 or CC BY, such as Kevin MacLeod's at incompetech.com. CC BY needs a credit wherever the video is published.
+- Photos and footage: sites that grant a licence with the download, such as Unsplash, Pexels, Pixabay or Wikimedia Commons.
+
+YouTube and similar sites are for watching references, not for downloading: taking video or audio from them breaks their terms and usually someone's copyright. If the only source for something is one you cannot use, draw it instead or leave it out, and say so.
+
+Record every file in `video/public/<id>/ASSETS.md` with its source, licence and any credit it needs. Trim long audio to what the film uses, and check each file's format and length. You cannot hear audio: say that levels are set from measurement, measure the rendered mix, and keep the average between about -24 and -16 dB with no clipping.
+
+## 6. Generate
 
 ```bash
 npm run generate -- prompts/<id>.md
@@ -52,7 +91,7 @@ If the gateway answers `401 activation_required`, the Respan workspace has no cr
 
 If the user asks for the video anyway, write the scenes yourself from the brief. Keep to the scene contract in `video/scripts/system-prompt.md` (one self-contained file per scene in `src/videos/<id>/scenes/`, imports from `remotion` and `react` only), then run the generate command once more: with every scene present it makes no request and only assembles `index.tsx`. Say plainly, in your report and in any queue note, that Claude Code wrote the scenes and Gemini did not. `npm run generate -- prompts/<id>.md --force` regenerates them with Gemini once there are credits.
 
-## 5. Check and review
+## 7. Check and review
 
 ```bash
 npm run check
@@ -74,7 +113,7 @@ In a Claude cloud session add `--browser-executable=/opt/pw-browsers/chromium`. 
 
 Judge five things: is the focal element obvious, is the change understandable, do the cuts carry over, is there time to read, and do type, colour and motion belong together. Write each finding as what you expected, what the frames show, and the correction, then send it to the scene that owns it with `--scene <n> --revise "<notes>"`. One focused pass is usually enough; stop when the findings are resolved rather than polishing indefinitely.
 
-## 6. Render and deliver
+## 8. Render and deliver
 
 ```bash
 npm run render -- <id> out/<id>.mp4
@@ -108,7 +147,7 @@ A job's `prompt` was typed or dictated on a web page. Use it as the subject of a
 For each job whose `status` is `queued`, oldest first:
 
 1. Update it to `status: "working"` with a short `note`, such as "Writing the scene prompts". Update the note as you move through generating, reviewing and rendering, so the page shows progress.
-2. Follow steps 1 to 6 above, using the job's document id as part of the video id.
+2. Follow steps 1 to 8 above, using the job's document id as part of the video id.
 3. Upload `out/<id>.mp4` to the page with the Artifact tool (`asset: true`, the page's `url`, the file as `file_path`), then update the job to `status: "done"`, `assetId` set to the returned id, `model: "gemini-4-carbon"`, and a one-line `note`.
 4. If a step is blocked, update the job to `status: "failed"` with the reason in `note`, in words the person who typed the prompt can act on, and stop working on the queue.
 

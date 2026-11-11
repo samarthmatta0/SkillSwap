@@ -22,6 +22,51 @@ Write these the same way in every scene, so the scenes join without a visible cu
 - **Curves.** Arrive `0.33, 1, 0.68, 1`. Leave `0.32, 0, 0.67, 0`. Reposition `0.65, 0, 0.35, 1`. Pop `0.38, 1.21, 0.22, 1`.
 - **Text line.** Every sentence sits on one line, vertically centred in the frame.
 
+## Sound
+
+Planned in `boards/skillswap-30.md`. Times are seconds from the start of the film. A cue with a length is a bed that fades in and out.
+
+| At (s) | File | Volume | Length (s) | Marks |
+| --- | --- | --- | --- | --- |
+| 0 | `music/deliberate-thought-32s.mp3` | 0.8 | 30 | Music bed for the whole film |
+| 0.3 | `sfx/mouse-click.wav` | 0.44 | | "What" lands |
+| 0.6 | `sfx/mouse-click.wav` | 0.44 | | "if" lands |
+| 0.9 | `sfx/mouse-click.wav` | 0.44 | | "learning" lands |
+| 1.2 | `sfx/mouse-click.wav` | 0.44 | | "was" lands |
+| 1.5 | `sfx/mouse-click.wav` | 0.44 | | "a" lands |
+| 1.8 | `sfx/mouse-click.wav` | 0.6 | | "swap?" lands |
+| 4.9 | `sfx/whoosh.wav` | 0.7 | | "swap" glides to the centre |
+| 6.3 | `sfx/switch.wav` | 0.8 | | Left column trades |
+| 6.75 | `sfx/switch.wav` | 0.8 | | Right column trades |
+| 7.2 | `sfx/switch.wav` | 0.8 | | Middle column trades |
+| 8.05 | `sfx/whoosh.wav` | 0.6 | | "swap" glides to the start of the line |
+| 11.2 | `sfx/whip.wav` | 0.6 | | Full stop becomes the bullet |
+| 12.4 | `sfx/switch.wav` | 0.56 | | Wheel step 1 |
+| 12.9 | `sfx/switch.wav` | 0.56 | | Wheel step 2 |
+| 13.4 | `sfx/switch.wav` | 0.56 | | Wheel step 3 |
+| 13.9 | `sfx/switch.wav` | 0.56 | | Wheel step 4 |
+| 14.4 | `sfx/switch.wav` | 0.56 | | Wheel step 5 |
+| 15.3 | `sfx/whip.wav` | 0.7 | | Wheel spins away |
+| 16.7 | `sfx/whoosh.wav` | 0.8 | | Card ring swings in |
+| 21.85 | `sfx/whoosh.wav` | 0.7 | | Card ring lifts out |
+| 23.2 | `sfx/whip.wav` | 0.6 | | Mark: first trade |
+| 24.05 | `sfx/whip.wav` | 0.6 | | Mark: second trade |
+| 26.25 | `sfx/whoosh.wav` | 0.6 | | Wordmark wipes on |
+| 27.1 | `sfx/ding.wav` | 0.6 | | Tagline lands |
+
+## Assets
+
+Gathered into `public/skillswap-30/`. Sources and licences are in `public/skillswap-30/ASSETS.md`.
+
+| File | What it is |
+| --- | --- |
+| `icons/guitar.svg` | White line icon of a guitar, for the "Guitar" pill |
+| `icons/code-xml.svg` | White line icon of code brackets, for the "React" pill |
+| `icons/chef-hat.svg` | White line icon of a chef's hat, for the "Cooking" pill |
+| `icons/languages.svg` | White line icon for languages, for the "Spanish" pill |
+| `icons/camera.svg` | White line icon of a camera, for the "Photography" pill |
+| `icons/person-standing.svg` | White line icon of a standing person, for the "Yoga" pill |
+
 ## Scene: Question (4s)
 
 The sentence "What if learning was a swap?" builds word by word.
@@ -39,7 +84,7 @@ Opens on the last frame of the previous scene, unchanged for 0.3 s.
 
 - 0.3 to 0.95 s: the five leading words fade out left to right, 0.1 s apart. Each takes 0.25 s and falls `12u` on the leave curve. They must be gone before "swap" passes over where they were.
 - 0.8 to 1.5 s: "swap" glides to the exact centre of the frame and grows to 1.43 times its size, on the reposition curve. Its question mark fades out over the first 0.3 s of the move.
-- 1.6 s: six skill pills pop in around the word, 3 frames apart, each scaling 0.8 to 1 over 0.35 s on the pop curve with its own 0.2 s fade. Top row, `170u` above centre: "Guitar", "React", "Cooking". Bottom row, `170u` below centre: "Spanish", "Photography", "Yoga". Columns sit at `-420u`, `0` and `+420u` from centre. Pills are `76u` tall, fully rounded, `2u` white outline at 70% opacity, white text at `40u`.
+- 1.6 s: six skill pills pop in around the word, 3 frames apart, each scaling 0.8 to 1 over 0.35 s on the pop curve with its own 0.2 s fade. Top row, `170u` above centre: "Guitar", "React", "Cooking". Bottom row, `170u` below centre: "Spanish", "Photography", "Yoga". Columns sit at `-420u`, `0` and `+420u` from centre. Pills are `76u` tall, fully rounded, `2u` white outline at 70% opacity, white text at `40u`, each with its `36u` icon from the Assets list to the left of the label.
 - At 2.3, 2.75 and 3.2 s one column trades places: its top pill travels to the bottom position and its bottom pill to the top, each bulging `110u` sideways in opposite directions so they pass around each other. 0.45 s on the reposition curve. Order: left column, right column, middle column. While a pill travels its outline is amber.
 - 3.68 to 3.98 s: all pills fade and shrink to 0.9 on the leave curve.
 - Last frame: only "swap", amber, centred, at 1.43 times size.

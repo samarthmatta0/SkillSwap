@@ -137,6 +137,46 @@ test("assembleIndex joins the scenes and totals their frames", () => {
   assert.match(index, /<Series\.Sequence durationInFrames=\{75\}>\n\s+<Scene02 \/>/);
 });
 
+test("parseBrief reads the Sound cue sheet and the Assets list", () => {
+  const brief = parseBrief(`# T
+
+## Sound
+
+| At (s) | File | Volume | Length (s) | Marks |
+| --- | --- | --- | --- | --- |
+| 0 | \`music/bed.mp3\` | 0.4 | 6 | Bed |
+| 1.5 | sfx/tick.wav | 0.8 | | A word lands |
+
+## Assets
+
+| File | What it is | Licence |
+| --- | --- | --- |
+| icons/guitar.svg | A white guitar icon | ISC |
+
+## Scene: Only (6s)
+
+Text.
+`);
+  assert.deepEqual(brief.sound, [
+    { at: 0, file: "music/bed.mp3", length: 6, volume: 0.4 },
+    { at: 1.5, file: "sfx/tick.wav", length: null, volume: 0.8 },
+  ]);
+  assert.deepEqual(brief.assets, [{ file: "icons/guitar.svg", what: "A white guitar icon" }]);
+  const index = assembleIndex(brief, "prompts/t.md", "demo");
+  assert.match(index, /import \{ AbsoluteFill, Audio, Sequence, Series, staticFile \} from "remotion";/);
+  assert.match(index, /<Sequence from=\{45\} layout="none">\n\s+<Audio src=\{staticFile\("demo\/sfx\/tick\.wav"\)\} volume=\{0\.8\} \/>/);
+  assert.match(index, /<Sequence durationInFrames=\{180\} from=\{0\} layout="none">/);
+  const ask = buildMessages({ system: "s", brief, index: 0, id: "demo" })[1].content;
+  assert.match(ask, /staticFile\("demo\/<file>"\)/);
+  assert.match(ask, /icons\/guitar\.svg`: A white guitar icon/);
+});
+
+test("parseBrief rejects unsafe sound paths and volumes", () => {
+  const sound = (row) => `## Sound\n\n| At | File | Volume |\n| --- | --- | --- |\n${row}\n\n## Scene: A (3s)\n`;
+  assert.throws(() => parseBrief(sound("| 0 | ../secret.mp3 | 0.5 |")), /not a plain file path/);
+  assert.throws(() => parseBrief(sound("| 0 | a.mp3 | 3 |")), /volume/);
+});
+
 test("requestVideo posts a chat completion and returns the content", async () => {
   let seen = null;
   const { server, url } = await gateway((request, body, response) => {

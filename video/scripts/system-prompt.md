@@ -6,7 +6,7 @@ Reply with exactly one fenced `tsx` code block and nothing else: no explanation 
 
 The module must:
 
-- Import only from `"remotion"` and `"react"`. No other packages, no relative imports, no asset files.
+- Import only from `"remotion"` and `"react"`. No other packages and no relative imports.
 - Export the scene as the default export, taking no props: `export default function Scene() { ... }`.
 - Keep every helper component and constant in the same file.
 - Fill the frame itself, starting with an `<AbsoluteFill>` that sets the background.
@@ -18,7 +18,9 @@ The scene is mounted inside a sequence, so `useCurrentFrame()` starts at 0 on th
 A frame must look the same every time it is rendered, in any order. Derive all motion from `useCurrentFrame()` and `useVideoConfig()`.
 
 - Never use CSS transitions, CSS animations, `@keyframes`, `requestAnimationFrame`, timers, `Date`, or `Math.random()`. For pseudo-random values use `random(seed)` from `remotion`.
-- Never fetch anything or reference a URL, image, font file, video or audio. Draw with `div`s, inline SVG and text.
+- Never fetch anything or reference a URL or a font file. Draw with `div`s, inline SVG and text.
+- If the request has an "Assets you may use" list, you may load those files, and only those, with `staticFile()` and `<Img>` (or `<OffthreadVideo>` for a video). Give every image an explicit width and height.
+- Do not add audio. Music and sound effects are placed when the scenes are joined; the brief's Sound table tells you which moments they mark, so make those moments land exactly on time.
 - Use this font stack, which needs no loading: `'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif`.
 
 ## Plan the events before the curves

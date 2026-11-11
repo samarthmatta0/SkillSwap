@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Sends a video brief to a model through the Respan gateway and writes the
-// Remotion composition that comes back to src/videos/<id>/index.tsx.
+// Sends a video brief to a model through the Respan gateway, one request per
+// scene, and writes the Remotion code that comes back to src/videos/<id>/.
 //
 //   node scripts/generate.mjs prompts/skillswap-promo.md
-//   node scripts/generate.mjs prompts/skillswap-promo.md --revise "Scene 2 is too fast"
+//   node scripts/generate.mjs prompts/skillswap-promo.md --scene 2 --revise "Too fast"
 //
 // The request is the OpenAI-compatible chat completion from the Respan gateway
 // quickstart: https://www.respan.ai/docs/ai-gateway/quickstart.md
@@ -17,7 +17,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PROJECT = resolve(HERE, "..");
 
 export const DEFAULT_GATEWAY = "https://gateway.respan.ai";
-export const DEFAULT_MODEL = "claude-sonnet-5.5";
+export const DEFAULT_MODEL = "gemini-4-carbon";
 const DEFAULT_MAX_TOKENS = 16_000;
 const REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -37,12 +37,13 @@ const BANNED = [
   [/\bsetTimeout\s*\(|\bsetInterval\s*\(/, "uses timers instead of the frame"],
 ];
 
-const META_LIMITS = {
-  durationInFrames: [1, 36_000],
+const FORMAT_LIMITS = {
   fps: [1, 120],
   height: [16, 4320],
   width: [16, 7680],
 };
+const FORMAT_DEFAULTS = { fps: 30, height: 1080, width: 1920 };
+const SCENE_SECONDS = [0.5, 60];
 
 export class GatewayError extends Error {
   constructor(status, code, message) {
@@ -122,21 +123,7 @@ export function validate(code) {
   }
 
   if (!/\bexport\s+default\b/.test(code)) {
-    problems.push("has no default export for the video component");
-  }
-
-  const meta = /\bexport\s+const\s+meta\s*=\s*\{([^}]*)\}/.exec(code);
-  if (meta === null) {
-    problems.push("has no `export const meta = {...}`");
-  } else {
-    for (const [field, [min, max]] of Object.entries(META_LIMITS)) {
-      const value = new RegExp(`\\b${field}\\s*:\\s*(\\d+)\\b`).exec(meta[1]);
-      if (value === null) {
-        problems.push(`meta.${field} is missing or not a whole-number literal`);
-      } else if (Number(value[1]) < min || Number(value[1]) > max) {
-        problems.push(`meta.${field} is ${value[1]}, outside ${min}-${max}`);
-      }
-    }
+    problems.push("has no default export for the scene component");
   }
 
   return problems;
@@ -202,28 +189,126 @@ export async function requestVideo({
   }
   if (choice.finish_reason === "length") {
     throw new Error(
-      `the reply was cut off at ${maxTokens} tokens; raise --max-tokens or shorten the brief`
+      `the reply was cut off at ${maxTokens} tokens; raise --max-tokens or split the scene in two`
     );
   }
 
   return { content, model: body.model ?? model, usage: body.usage ?? null };
 }
 
-export function buildMessages({ system, brief, current = null, notes = null }) {
+// A brief is optional front matter (width, height, fps), then text that applies
+// to the whole video, then one "## Scene: Name (4s)" section per animation.
+export function parseBrief(text) {
+  const format = { ...FORMAT_DEFAULTS };
+  let body = text.replace(/\r\n/g, "\n");
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(body);
+  if (front !== null) {
+    body = body.slice(front[0].length);
+    for (const line of front[1].split("\n")) {
+      const pair = /^\s*([a-z]+)\s*:\s*(\S+)\s*$/.exec(line);
+      if (pair === null) {
+        continue;
+      }
+      if (!(pair[1] in FORMAT_LIMITS)) {
+        throw new Error(`the brief's front matter has an unknown setting "${pair[1]}"; use width, height or fps`);
+      }
+      const value = Number(pair[2]);
+      const [min, max] = FORMAT_LIMITS[pair[1]];
+      if (!Number.isInteger(value) || value < min || value > max) {
+        throw new Error(`the brief's ${pair[1]} must be a whole number from ${min} to ${max}`);
+      }
+      format[pair[1]] = value;
+    }
+  }
+
+  const heading = /^##[ \t]+Scene(?:[ \t]+\d+)?[ \t]*:[ \t]*(.+?)[ \t]*\((\d+(?:\.\d+)?)[ \t]*s\)[ \t]*$/gim;
+  const marks = [...body.matchAll(heading)];
+  if (marks.length === 0) {
+    throw new Error('the brief has no scenes; add sections headed like "## Scene: Hook (4s)"');
+  }
+  const scenes = marks.map((mark, index) => {
+    const seconds = Number(mark[2]);
+    if (seconds < SCENE_SECONDS[0] || seconds > SCENE_SECONDS[1]) {
+      throw new Error(`scene "${mark[1]}" lasts ${seconds} s; use ${SCENE_SECONDS[0]} to ${SCENE_SECONDS[1]}`);
+    }
+    const end = index + 1 < marks.length ? marks[index + 1].index : body.length;
+    return {
+      name: mark[1],
+      seconds,
+      frames: Math.round(seconds * format.fps),
+      text: body.slice(mark.index + mark[0].length, end).trim(),
+    };
+  });
+
+  return { ...format, overview: body.slice(0, marks[0].index).trim(), scenes };
+}
+
+export const sceneFile = (index) => `scene-${String(index + 1).padStart(2, "0")}.tsx`;
+
+// The model sees the whole plan but is asked for one scene, so each animation
+// gets its own prompt and can be revised on its own.
+export function buildMessages({ system, brief, index, current = null, notes = null }) {
+  const scene = brief.scenes[index];
+  const outline = brief.scenes
+    .map((s, i) => `${i + 1}. ${s.name} (${s.seconds} s)`)
+    .join("\n");
+  const neighbour = (i, label) =>
+    brief.scenes[i] === undefined
+      ? ""
+      : `\n\n## ${label}, for continuity only. Do not draw it.\n\n${brief.scenes[i].name}: ${brief.scenes[i].text}`;
+  const ask = `# The video
+
+${brief.overview}
+
+Frame: ${brief.width}x${brief.height} at ${brief.fps} fps.
+
+# All scenes, in order
+
+${outline}
+
+# Write scene ${index + 1} of ${brief.scenes.length}: ${scene.name}
+
+It lasts ${scene.seconds} s, which is ${scene.frames} frames. Its frame counter starts at 0.
+
+${scene.text}${neighbour(index - 1, "The scene before")}${neighbour(index + 1, "The scene after")}`;
+
   const messages = [
     { role: "system", content: system },
-    { role: "user", content: brief },
+    { role: "user", content: ask },
   ];
   if (current !== null) {
     messages.push(
       { role: "assistant", content: `\`\`\`tsx\n${current.trimEnd()}\n\`\`\`` },
       {
         role: "user",
-        content: `Revise the video with these notes and return the complete file again under the same rules.\n\n${notes}`,
+        content: `Revise this scene with these notes and return the complete file again under the same rules.\n\n${notes}`,
       }
     );
   }
   return messages;
+}
+
+export function assembleIndex(brief, source) {
+  const names = brief.scenes.map((_, i) => `Scene${String(i + 1).padStart(2, "0")}`);
+  const total = brief.scenes.reduce((sum, scene) => sum + scene.frames, 0);
+  return `// Assembled by scripts/generate.mjs from ${source}. Running it again rewrites this file.
+import { AbsoluteFill, Series } from "remotion";
+${names.map((name, i) => `import ${name} from "./scenes/${sceneFile(i).replace(/\.tsx$/, "")}";`).join("\n")}
+
+export const meta = { durationInFrames: ${total}, fps: ${brief.fps}, height: ${brief.height}, width: ${brief.width} };
+
+export default function Video() {
+  return (
+    <AbsoluteFill>
+      <Series>
+${brief.scenes
+  .map((scene, i) => `        <Series.Sequence durationInFrames={${scene.frames}}>\n          <${names[i]} />\n        </Series.Sequence>`)
+  .join("\n")}
+      </Series>
+    </AbsoluteFill>
+  );
+}
+`;
 }
 
 async function exists(path) {
@@ -239,9 +324,13 @@ const USAGE = `Usage: node scripts/generate.mjs <brief.md> [options]
 
   --id <slug>          Video id and folder name (default: the brief's file name)
   --model <id>         Respan model ID (default: $RESPAN_MODEL or ${DEFAULT_MODEL})
-  --revise "<notes>"   Send the existing video back with notes and replace it
-  --force              Replace an existing video without --revise
-  --max-tokens <n>     Reply budget (default: ${DEFAULT_MAX_TOKENS})
+  --scene <n>          Work on one scene only (1 is the first)
+  --revise "<notes>"   With --scene: send that scene back with notes and replace it
+  --force              Generate again scenes that already exist
+  --max-tokens <n>     Reply budget per scene (default: ${DEFAULT_MAX_TOKENS})
+
+Scenes that already have a file are kept, so a run that stopped part-way can be
+started again and picks up where it left off.
 `;
 
 async function main() {
@@ -254,6 +343,7 @@ async function main() {
       "max-tokens": { type: "string" },
       model: { type: "string" },
       revise: { type: "string" },
+      scene: { type: "string" },
     },
   });
 
@@ -274,6 +364,15 @@ async function main() {
     throw new Error("--max-tokens must be a positive whole number");
   }
 
+  const brief = parseBrief(await readFile(briefPath, "utf8"));
+  const only = values.scene === undefined ? null : Number(values.scene) - 1;
+  if (only !== null && (!Number.isInteger(only) || brief.scenes[only] === undefined)) {
+    throw new Error(`--scene must be a number from 1 to ${brief.scenes.length}`);
+  }
+  if (values.revise !== undefined && only === null) {
+    throw new Error("--revise needs --scene <n> to say which scene the notes are for");
+  }
+
   const envFiles = [join(PROJECT, ".env"), join(PROJECT, "..", ".env")];
   const apiKey = await setting("RESPAN_API_KEY", envFiles);
   if (!apiKey) {
@@ -281,45 +380,76 @@ async function main() {
   }
   const gateway = (await setting("RESPAN_GATEWAY_URL", envFiles)) ?? DEFAULT_GATEWAY;
   const model = values.model ?? (await setting("RESPAN_MODEL", envFiles)) ?? DEFAULT_MODEL;
+  const system = await readFile(join(HERE, "system-prompt.md"), "utf8");
 
-  const target = join(PROJECT, "src", "videos", id, "index.tsx");
-  const present = await exists(target);
-  if (values.revise !== undefined && !present) {
-    throw new Error(`--revise needs an existing video, and ${target} is not there`);
+  const folder = join(PROJECT, "src", "videos", id);
+  const sceneDir = join(folder, "scenes");
+
+  let written = 0;
+  for (const index of brief.scenes.keys()) {
+    if (only !== null && index !== only) {
+      continue;
+    }
+    const scene = brief.scenes[index];
+    const target = join(sceneDir, sceneFile(index));
+    const present = await exists(target);
+    const label = `Scene ${index + 1}/${brief.scenes.length} "${scene.name}"`;
+    if (values.revise !== undefined && !present) {
+      throw new Error(`--revise needs an existing scene, and ${target} is not there`);
+    }
+    if (present && values.revise === undefined && !values.force) {
+      process.stdout.write(`${label}: kept (already written)\n`);
+      continue;
+    }
+
+    process.stdout.write(`${label}: asking ${model} ...\n`);
+    const reply = await requestVideo({
+      gateway,
+      apiKey,
+      model,
+      maxTokens,
+      messages: buildMessages({
+        system,
+        brief,
+        index,
+        current: values.revise === undefined ? null : await readFile(target, "utf8"),
+        notes: values.revise ?? null,
+      }),
+    });
+
+    const code = extractCode(reply.content);
+    const problems = validate(code);
+    if (problems.length > 0) {
+      const rejected = join(PROJECT, "out", `${id}.${sceneFile(index).replace(/\.tsx$/, "")}.rejected.tsx`);
+      await mkdir(dirname(rejected), { recursive: true });
+      await writeFile(rejected, code, "utf8");
+      throw new Error(
+        `${label} was not written because it:\n${problems.map((p) => `  - ${p}`).join("\n")}\nIt is saved for inspection at ${rejected}`
+      );
+    }
+    await mkdir(sceneDir, { recursive: true });
+    await writeFile(target, code, "utf8");
+    written += 1;
+    const usage = reply.usage === null
+      ? ""
+      : ` (${reply.usage.prompt_tokens ?? "?"} prompt + ${reply.usage.completion_tokens ?? "?"} completion tokens)`;
+    process.stdout.write(`${label}: wrote ${sceneFile(index)} with ${reply.model}${usage}\n`);
   }
-  if (present && values.revise === undefined && !values.force) {
-    throw new Error(`${target} already exists. Pass --revise "<notes>" to change it or --force to replace it.`);
+
+  const missing = [];
+  for (const index of brief.scenes.keys()) {
+    if (!(await exists(join(sceneDir, sceneFile(index))))) {
+      missing.push(index + 1);
+    }
+  }
+  if (missing.length > 0) {
+    process.stdout.write(`Not assembled yet: scene ${missing.join(", ")} still to write. Run without --scene to finish.\n`);
+    return;
   }
 
-  const messages = buildMessages({
-    system: await readFile(join(HERE, "system-prompt.md"), "utf8"),
-    brief: await readFile(briefPath, "utf8"),
-    current: values.revise === undefined ? null : await readFile(target, "utf8"),
-    notes: values.revise ?? null,
-  });
-
-  process.stdout.write(`Asking ${model} through ${gateway} ...\n`);
-  const reply = await requestVideo({ gateway, apiKey, model, messages, maxTokens });
-
-  const code = extractCode(reply.content);
-  const problems = validate(code);
-  if (problems.length > 0) {
-    const rejected = join(PROJECT, "out", `${id}.rejected.tsx`);
-    await mkdir(dirname(rejected), { recursive: true });
-    await writeFile(rejected, code, "utf8");
-    throw new Error(
-      `the returned video was not written because it:\n${problems.map((p) => `  - ${p}`).join("\n")}\nIt is saved for inspection at ${rejected}`
-    );
-  }
-
-  await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, code, "utf8");
-
-  const usage = reply.usage === null
-    ? ""
-    : ` (${reply.usage.prompt_tokens ?? "?"} prompt + ${reply.usage.completion_tokens ?? "?"} completion tokens)`;
+  await writeFile(join(folder, "index.tsx"), assembleIndex(brief, `prompts/${basename(briefPath)}`), "utf8");
   process.stdout.write(
-    `Wrote ${target}\nModel: ${reply.model}${usage}\n\nNext:\n  npm run check\n  npm run studio            # or open this folder in Remocn Studio\n  npm run render -- ${id} out/${id}.mp4\n`
+    `\n${written} scene${written === 1 ? "" : "s"} written. Assembled ${join(folder, "index.tsx")}\n\nNext:\n  npm run check\n  npm run studio            # or open this folder in Remocn Studio\n  npm run render -- ${id} out/${id}.mp4\n`
   );
 }
 

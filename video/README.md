@@ -1,6 +1,14 @@
 # SkillSwap videos
 
-Motion graphics for SkillSwap, written as code with [Remotion](https://www.remotion.dev). A brief goes to a model through the [Respan gateway](https://www.respan.ai/docs/ai-gateway/quickstart.md), and the Remotion composition that comes back is saved here as a normal project you can preview, edit, render, or open in [Remocn Studio](https://remocn.studio).
+Motion graphics for SkillSwap, written as code with [Remotion](https://www.remotion.dev).
+
+The work is split between two models. Claude Code is the prompter: it takes the request, writes a brief with one section per animation, reviews what comes back and renders the file. `gemini-4-carbon`, called through the [Respan gateway](https://www.respan.ai/docs/ai-gateway/quickstart.md), writes the Remotion code for each scene. The result is a normal Remotion project you can preview, edit, render, or open in [Remocn Studio](https://remocn.studio).
+
+There are three ways in:
+
+- Ask Claude Code in this repo for a video. It follows `.claude/skills/motion-video/SKILL.md`.
+- Send a brief from the Motion Booth page, https://claude.ai/artifact/E9S7yET7sToi8h567CsdBZ. It queues the brief for Claude Code and shows the rendered video when it is done.
+- Run the generator yourself on a brief you wrote, as below.
 
 This folder is separate from the SkillSwap app: it has its own `package.json` and nothing in the app imports it.
 
@@ -19,29 +27,38 @@ RESPAN_API_KEY=your-key
 
 The gateway needs Respan credits or a saved provider key. Without either it answers `401 activation_required`.
 
+## Write a brief
+
+A brief is a Markdown file in `prompts/`. `prompts/skillswap-promo.md` is the example to copy. It has:
+
+- Optional front matter with `width`, `height` and `fps` (default 1920x1080 at 30).
+- Text for the whole video: audience, tone, brand colours, and one continuity idea that carries across the cuts.
+- One section per animation, headed `## Scene: Name (4s)`. Say what is on screen, when each thing moves, how far and how fast, what holds still, and how the scene hands off to the next.
+
 ## Generate a video
 
 ```bash
 npm run generate -- prompts/skillswap-promo.md
 ```
 
-This writes `src/videos/skillswap-promo/index.tsx`. The video id is the brief's file name unless you pass `--id`.
+Each scene is one request to the model, which sees the whole plan and the neighbouring scenes for context. The scenes are written to `src/videos/skillswap-promo/scenes/` and joined in `src/videos/skillswap-promo/index.tsx`. The video id is the brief's file name unless you pass `--id`.
 
-To change a video, send it back with notes:
+Scenes that already have a file are kept, so a run that stopped part-way picks up where it left off. To change one scene, send it back with notes:
 
 ```bash
-npm run generate -- prompts/skillswap-promo.md --revise "Scene 2 is too fast. Hold the Matched pill longer."
+npm run generate -- prompts/skillswap-promo.md --scene 2 --revise "The cards arrive too fast. Use a 0.7 s response."
 ```
 
 | Option | Meaning |
 | --- | --- |
 | `--id <slug>` | Video id and folder name |
-| `--model <id>` | Any ID from the [Respan model list](https://platform.respan.ai/platform/models). Default `claude-sonnet-5.5`, or `RESPAN_MODEL` |
-| `--revise "<notes>"` | Revise the existing video |
-| `--force` | Replace the existing video from the brief alone |
-| `--max-tokens <n>` | Reply budget, default 16000 |
+| `--model <id>` | Any ID from the [Respan model list](https://platform.respan.ai/platform/models). Default `gemini-4-carbon`, or `RESPAN_MODEL` |
+| `--scene <n>` | Work on one scene only |
+| `--revise "<notes>"` | With `--scene`: revise that scene |
+| `--force` | Generate again scenes that already exist |
+| `--max-tokens <n>` | Reply budget per scene, default 16000 |
 
-The rules the model works under are in `scripts/system-prompt.md`. A reply is only written if it imports nothing but `remotion` and `react`, makes no network calls, and declares its size and length; otherwise it is saved to `out/<id>.rejected.tsx` and the command fails. Read generated code before you ship it, as you would any other.
+The rules the model works under, including the easing curves, spring settings and timing rules that keep the motion smooth, are in `scripts/system-prompt.md`. A scene is only written if it imports nothing but `remotion` and `react` and makes no network calls; otherwise it is saved to `out/` as a `.rejected.tsx` file and the command fails. Read generated code before you ship it, as you would any other.
 
 ## Preview and render
 
@@ -89,4 +106,4 @@ npm test
 
 ## Licences
 
-Remotion needs a company licence for teams of four or more: see [remotion.dev/license](https://www.remotion.dev/license). `src/videos/registry.tsx` comes from Remocn Studio under the MIT License; see `THIRD_PARTY_NOTICES.md`.
+Remotion needs a company licence for teams of four or more: see [remotion.dev/license](https://www.remotion.dev/license). `src/videos/registry.tsx` comes from Remocn Studio, and the curve, spring and timing rules in `scripts/system-prompt.md` are adapted from its motion-design guide, both under the MIT License; see `THIRD_PARTY_NOTICES.md`.

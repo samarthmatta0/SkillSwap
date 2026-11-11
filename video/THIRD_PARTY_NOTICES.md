@@ -1,6 +1,8 @@
 src/videos/registry.tsx is copied unchanged from Remocn Studio
-(https://github.com/Remocn/remocn-studio, templates/remotion/registry.tsx),
-used under the MIT License:
+(https://github.com/Remocn/remocn-studio, templates/remotion/registry.tsx).
+The easing curves, spring conversion and timing rules in
+scripts/system-prompt.md are adapted from the same project's motion-design
+guide (agent/skills/motion-design/rules). Both are used under the MIT License:
 
 MIT License
 

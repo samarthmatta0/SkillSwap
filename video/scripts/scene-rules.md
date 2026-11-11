@@ -1,17 +1,15 @@
-You are a motion designer who writes product videos as code with Remotion 4 and React 19. You receive the plan for a whole video and are asked for one scene of it. Another process joins the scenes in order, so your job is that one scene, moving smoothly and ready to cut against its neighbours.
+# Scene rules
 
-## Output contract
+How to write one scene of a video for this project. A scene is one file, `src/videos/<id>/scenes/scene-NN.tsx`, written from its section of the brief. `scripts/assemble.mjs` joins the scenes in order and places the sound, so a scene's job is to move smoothly and cut cleanly against its neighbours.
 
-Reply with exactly one fenced `tsx` code block and nothing else: no explanation before or after it. The block is saved unchanged as one scene file and compiled, so it must be a complete TypeScript module that type-checks under `strict`.
+## The file
 
-The module must:
-
-- Import only from `"remotion"` and `"react"`. No other packages and no relative imports.
 - Export the scene as the default export, taking no props: `export default function Scene() { ... }`.
-- Keep every helper component and constant in the same file.
-- Fill the frame itself, starting with an `<AbsoluteFill>` that sets the background.
+- Import from `remotion`, `@remotion/*` packages, `react`, and files in this project. Nothing from the network.
+- Fill the frame, starting with an `<AbsoluteFill>` that sets the background.
+- It must type-check under `strict` (`npm run check`).
 
-The scene is mounted inside a sequence, so `useCurrentFrame()` starts at 0 on the scene's first frame. The request states how many frames the scene lasts; put that number in a constant and time the scene against it.
+The scene is mounted inside a sequence, so `useCurrentFrame()` starts at 0 on the scene's first frame. The brief states how long the scene lasts; put its event times in named constants and time the scene against them.
 
 ## Determinism
 
@@ -19,8 +17,8 @@ A frame must look the same every time it is rendered, in any order. Derive all m
 
 - Never use CSS transitions, CSS animations, `@keyframes`, `requestAnimationFrame`, timers, `Date`, or `Math.random()`. For pseudo-random values use `random(seed)` from `remotion`.
 - Never fetch anything or reference a URL or a font file. Draw with `div`s, inline SVG and text.
-- If the request has an "Assets you may use" list, you may load those files, and only those, with `staticFile()` and `<Img>` (or `<OffthreadVideo>` for a video). Give every image an explicit width and height.
-- Do not add audio. Music and sound effects are placed when the scenes are joined; the brief's Sound table tells you which moments they mark, so make those moments land exactly on time.
+- Load files only from the brief's Assets table, with `staticFile("<id>/<file>")` and `<Img>` (or `<OffthreadVideo>` for footage). Give every image an explicit width and height.
+- Do not add audio in a scene. Music and sound effects are placed when the scenes are joined; the brief's Sound table says which moments they mark, so make those moments land exactly on time.
 - Use this font stack, which needs no loading: `'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif`.
 
 ## Plan the events before the curves
@@ -61,6 +59,6 @@ Choose the curve for the gesture. Use these with `Easing.bezier(...)`:
 
 ## Cutting against the neighbours
 
-- The request describes the scene before and the scene after. Start from a state that follows the previous scene's last frame and end on a state the next scene can open from, as the brief describes: a shared colour, shape, position or direction of travel.
+- Read the scene before and the scene after in the brief. Start from a state that follows the previous scene's last frame and end on a state the next scene can open from, as the brief describes: a shared colour, shape, position or direction of travel.
 - Unless the brief asks for a hard cut, finish the exit in the last 0.25 to 0.4 seconds, so the scene's final frame is its hand-off state.
 - The last scene of a video ends on a still, readable frame held for at least 1.5 seconds.

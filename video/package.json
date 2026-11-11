@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "generate": "node scripts/generate.mjs",
+    "assemble": "node scripts/assemble.mjs",
     "studio": "remotion studio",
     "render": "remotion render",
     "check": "tsc --noEmit",
-    "test": "node --test scripts/generate.test.mjs"
+    "test": "node --test scripts/assemble.test.mjs"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.520",

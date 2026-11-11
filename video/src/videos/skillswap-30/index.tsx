@@ -1,4 +1,4 @@
-// Assembled by scripts/generate.mjs from prompts/skillswap-30.md. Running it again rewrites this file.
+// Assembled by scripts/assemble.mjs from prompts/skillswap-30.md. Running it again rewrites this file.
 import { AbsoluteFill, Audio, Sequence, Series, staticFile } from "remotion";
 import Scene01 from "./scenes/scene-01";
 import Scene02 from "./scenes/scene-02";

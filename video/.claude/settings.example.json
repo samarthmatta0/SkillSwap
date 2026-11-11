@@ -1,7 +1,0 @@
-{
-  "env": {
-    "ANTHROPIC_BASE_URL": "https://gateway.respan.ai",
-    "ANTHROPIC_API_KEY": "YOUR_RESPAN_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN": ""
-  }
-}

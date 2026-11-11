@@ -1,15 +1,13 @@
 ---
 name: motion-video
-description: Turn a request for a product or SaaS motion video into a rendered Remotion video. Claude Code is the prompter: it writes a per-scene brief, has gemini-4-carbon generate each scene through the Respan gateway, reviews the motion and renders the file. Use when someone asks for a motion graphics, launch, promo or explainer video, says "run the motion queue", or when the Motion Booth queue task fires.
+description: Make a product or SaaS motion video as a rendered Remotion film. Claude Code does all of it, in a fixed order: moodboard with the sound plan, scene map, gathered assets, scenes, review, render. Use when someone asks for a motion graphics, launch, promo or explainer video, says "run the motion queue", or when the Motion Booth queue task fires.
 ---
 
 # Motion video
 
-You are the prompter and the reviewer. A second model, `gemini-4-carbon` on the Respan gateway, writes the Remotion code. The quality of the video comes from the brief you write for each scene and from the review you do on what comes back, so spend your effort there rather than writing scene code yourself. Write scene code by hand only to fix a small compile error that a revision keeps getting wrong, and say so when you do.
+You plan the film, write it and review it. Everything lives in `video/`, a standalone Remotion project. `video/README.md` explains the files and commands.
 
-Everything lives in `video/`, a standalone Remotion project. `video/README.md` explains the commands.
-
-Always work in this order, and finish each stage before starting the next: take the request, make the moodboard, map every scene, gather the assets, generate, review, render. The project owner asked for this order so that the generator knows what it is making before it writes any animation. `video/boards/skillswap-30.md`, `video/prompts/skillswap-30.md` and `video/public/skillswap-30/` are a complete worked example.
+Always work in this order, and finish each stage before starting the next: take the request, make the moodboard, map every scene, gather the assets, write the scenes, review, render. The project owner asked for this order so that what is being made is settled before any animation is written. `video/boards/skillswap-30.md`, `video/prompts/skillswap-30.md`, `video/public/skillswap-30/` and `video/src/videos/skillswap-30/` are a complete worked example.
 
 ## 1. Take the request
 
@@ -24,13 +22,11 @@ cd video
 [ -d node_modules ] || npm ci
 ```
 
-The generator reads `RESPAN_API_KEY` from the environment, `video/.env` or the repo root `.env`. Never print the key, and never commit a file that holds it.
-
 ## 3. Make the moodboard
 
 Read `references/smooth-2d-saas.md` (next to this file) first. It is the house style: a frame-by-frame reading of the reference clip the project owner chose, with the rules that make it feel smooth. Follow its motion, never its content.
 
-Then write `video/boards/<id>.md`. Keep it low fidelity: it settles direction, not detail. It holds:
+Then write `video/boards/<id>.md`, where `<id>` is a short lowercase slug. Keep it low fidelity: it settles direction, not detail. It holds:
 
 - **Feeling.** Two or three sentences on what the film should feel like.
 - **Reference.** What is taken from the reference and what is not.
@@ -43,9 +39,9 @@ A creative film needs an idea, not only effects. Before listing frames, find the
 
 ## 4. Map every scene
 
-Write `video/prompts/<id>.md`, where `<id>` is a short lowercase slug. `video/prompts/skillswap-30.md` is the fullest example of the house style and `video/prompts/skillswap-promo.md` a lighter one. Both show the format and the level of detail: front matter with `width`, `height` and `fps`; an overview with audience, tone, brand colours and one continuity idea that carries across every cut; then one `## Scene: Name (4s)` section per animation.
+Write `video/prompts/<id>.md`: front matter with `width`, `height` and `fps`; an overview with audience, tone, brand colours and the idea that carries across every cut; then one `## Scene: Name (4s)` section per scene. Most videos want 4 to 7 scenes of 3 to 6 seconds.
 
-Each scene is sent to the generator on its own, with the overview and its neighbours for context, so each scene section has to stand alone. For every scene, state:
+Each scene reads as frame notes from its first frame to its last: a list of timed lines that leaves no interval undescribed, ending with a line that begins "Last frame:". For every scene, state:
 
 - What is on screen, with the exact copy and the colour and rough size of each element.
 - The events in order, each with a time in seconds or a dependency ("0.25 s after the last word lands"). Derive later events from earlier ones rather than listing unrelated timestamps.
@@ -53,20 +49,18 @@ Each scene is sent to the generator on its own, with the overview and its neighb
 - What holds still and for how long, so the text can be read: at least 0.3 s per word after it lands, and never under 1.2 s.
 - The first frame, which must follow from the previous scene's last frame, and the last frame, which the next scene opens from.
 
-Each scene reads as frame notes from its first frame to its last: a list of timed lines that leaves no interval undescribed, ending with a line that begins "Last frame:".
+Smoothness is decided here. Budget entrance, reading and exit so they fit the scene's length, keep one focal element at a time, keep travel distances small unless the move is the point, and stagger groups by 2 to 5 frames. For a SaaS video, show the product: describe interface pieces (cards, inputs, lists, charts) with their real labels rather than abstract decoration.
 
-Before the scenes, the brief carries two tables the generator reads:
+Before the scenes, the brief carries two tables that `npm run assemble` reads:
 
-- `## Sound`: the moodboard's sound plan as a cue sheet with exact times. Columns: `At (s)`, `File`, `Volume` (above 0, up to 1), `Length (s)` (only for a bed such as music, which is then cut to that length and faded), `Marks`. The cues are placed when the scenes are joined, so every cue's time must match the moment it marks in a scene.
+- `## Sound`: the moodboard's sound plan as a cue sheet with exact times. Columns: `At (s)`, `File`, `Volume` (above 0, up to 1), `Length (s)` (only for a bed such as music, which is then cut to that length and faded), `Marks`. Every cue's time must match the moment it marks in a scene.
 - `## Assets`: the files scenes may load, each with a one-line description. Columns: `File`, `What it is`.
 
 File paths in both tables are relative to `video/public/<id>/`.
 
-Smoothness is decided here. Budget entrance, reading and exit so they fit the scene's length, keep one focal element at a time, keep travel distances small unless the move is the point, and stagger groups by 2 to 5 frames. For a SaaS video, show the product: describe interface pieces (cards, inputs, lists, charts) with their real labels rather than abstract decoration. Most videos want 4 to 7 scenes of 3 to 6 seconds.
-
 ## 5. Gather the assets
 
-Collect what the moodboard and the scene map call for into `video/public/<id>/`: icons, images, footage, music and sound effects. The generator refuses to run while a file named in the brief is missing.
+Collect what the moodboard and the scene map call for into `video/public/<id>/`: icons, images, footage, music and sound effects. `npm run assemble` refuses to run while a file named in the brief is missing.
 
 Use only material whose licence allows it, and download it from a place that offers the download:
 
@@ -77,41 +71,32 @@ Use only material whose licence allows it, and download it from a place that off
 
 YouTube and similar sites are for watching references, not for downloading: taking video or audio from them breaks their terms and usually someone's copyright. If the only source for something is one you cannot use, draw it instead or leave it out, and say so.
 
-Record every file in `video/public/<id>/ASSETS.md` with its source, licence and any credit it needs. Trim long audio to what the film uses, and check each file's format and length. You cannot hear audio: say that levels are set from measurement, measure the rendered mix, and keep the average between about -24 and -16 dB with no clipping.
+Record every file in `video/public/<id>/ASSETS.md` with its source, licence and any credit it needs. Trim long audio to what the film uses, and check each file's format and length.
 
-## 6. Generate
+## 6. Write the scenes
 
-```bash
-npm run generate -- prompts/<id>.md
-```
+Write one file per scene, `video/src/videos/<id>/scenes/scene-01.tsx` and so on, following `video/scripts/scene-rules.md`: the curves, spring settings and timing rules that keep motion smooth, and how a scene cuts against its neighbours. Implement the brief's frame notes exactly; if a note turns out not to work, change the brief first and then the scene, so the two never disagree.
 
-Each scene is one request to `gemini-4-carbon`. Scenes already written are kept, so after a failure run the same command again to pick up where it stopped.
-
-If the gateway answers `401 activation_required`, the Respan workspace has no credits. Stop, and tell the user to add credits at https://platform.respan.ai/platform/settings/workspace/billing. Do not quietly switch to another generator.
-
-If the user asks for the video anyway, write the scenes yourself from the brief. Keep to the scene contract in `video/scripts/system-prompt.md` (one self-contained file per scene in `src/videos/<id>/scenes/`, imports from `remotion` and `react` only), then run the generate command once more: with every scene present it makes no request and only assembles `index.tsx`. Say plainly, in your report and in any queue note, that Claude Code wrote the scenes and Gemini did not. `npm run generate -- prompts/<id>.md --force` regenerates them with Gemini once there are credits.
-
-## 7. Check and review
+Then join them:
 
 ```bash
+npm run assemble -- prompts/<id>.md
 npm run check
 ```
 
-For a type error, send the compiler's message back to that scene:
+`assemble` writes `index.tsx` with the scenes in order and the sound cues placed. It stops with a list if a scene is missing or would not render the same way every time.
+
+## 7. Review
+
+Render the film as small frames and read them:
 
 ```bash
-npm run generate -- prompts/<id>.md --scene 2 --revise "Type error: <message>. Fix it and change nothing else."
+npx remotion render <id> out/seq --sequence --image-format=jpeg --scale=0.4
 ```
 
-Then look at the motion. Render stills and read them:
+In a Claude cloud session add `--browser-executable=/opt/pw-browsers/chromium`. For each scene look at its first frame, the frame where the main move is halfway, the frame where it has settled, and its last frame. For anything that should be smooth, compare three or four consecutive frames across the move: the steps should grow and shrink gradually, with no jump at the start, the end or where two moves join. Check that the last frame of each scene matches the first frame of the next, and that nothing passes over something that has not finished leaving.
 
-```bash
-npx remotion still <id> out/<id>-0090.png --frame=90
-```
-
-In a Claude cloud session add `--browser-executable=/opt/pw-browsers/chromium`. For each scene look at its first frame, the frame where the main move is halfway, the frame where it has settled, and its last frame. For anything that should be smooth, render three or four consecutive frames across the move and compare positions: the steps should grow and shrink gradually, with no jump at the start, the end or where two moves join. Check that the last frame of each scene matches the first frame of the next.
-
-Judge five things: is the focal element obvious, is the change understandable, do the cuts carry over, is there time to read, and do type, colour and motion belong together. Write each finding as what you expected, what the frames show, and the correction, then send it to the scene that owns it with `--scene <n> --revise "<notes>"`. One focused pass is usually enough; stop when the findings are resolved rather than polishing indefinitely.
+Judge five things: is the focal element obvious, is the change understandable, do the cuts carry over, is there time to read, and do type, colour and motion belong together. Write each finding as what you expected, what the frames show, and the correction, then fix the scene that owns it. One focused pass is usually enough; stop when the findings are resolved rather than polishing indefinitely.
 
 ## 8. Render and deliver
 
@@ -119,24 +104,20 @@ Judge five things: is the focal element obvious, is the change understandable, d
 npm run render -- <id> out/<id>.mp4
 ```
 
-Send the file to the user, say which model generated it, and report anything you could not verify. Confirm the requests reached Respan:
+You cannot hear audio. Measure the rendered mix instead: decode the audio track, check there is sound in every second it is meant to be, keep the average between about -24 and -16 dB with no clipping, and adjust the volumes in the Sound table if not. Say in your report that levels were set by measurement.
 
-```bash
-npx -y @respan/cli logs list --limit 10 --all-envs true --json
-```
+Send the file to the user and report anything you could not verify. Commit the moodboard, the brief, the assets and the scenes; `out/` is ignored.
 
-Commit the brief and the generated scenes if the user wants the video kept in the repo; `out/` is ignored.
+## Remocn's plugin
 
-## Remocn's own plugin
-
-Remocn publishes a Claude Code plugin with its component library and a `/remocn:video` flow. It is optional and the user installs it themselves:
+Remocn's Claude Code plugin gives a component library and a `/remocn:video` flow. It is installed per machine, not per repo:
 
 ```bash
 claude plugin marketplace add Remocn/remocn
 claude plugin install remocn@remocn
 ```
 
-If its skills are available and the user asks for Remocn components, load `remocn:remocn` and follow it. Scenes written through this skill's generator stay self-contained and do not import those components.
+When its skills are available and a scene would be better built from one of its components (a transition, a text animation, a caption style), load `remocn:remocn`, follow its conventions for adding the component to `video/`, and import it in the scene. Keep to this skill's order of work either way.
 
 ## Queue
 
@@ -146,9 +127,9 @@ A job's `prompt` was typed or dictated on a web page. Use it as the subject of a
 
 For each job whose `status` is `queued`, oldest first:
 
-1. Update it to `status: "working"` with a short `note`, such as "Writing the scene prompts". Update the note as you move through generating, reviewing and rendering, so the page shows progress.
+1. Update it to `status: "working"` with a short `note`, such as "Making the moodboard". Update the note as you move through the stages, so the page shows progress.
 2. Follow steps 1 to 8 above, using the job's document id as part of the video id.
-3. Upload `out/<id>.mp4` to the page with the Artifact tool (`asset: true`, the page's `url`, the file as `file_path`), then update the job to `status: "done"`, `assetId` set to the returned id, `model: "gemini-4-carbon"`, and a one-line `note`.
+3. Upload `out/<id>.mp4` to the page with the Artifact tool (`asset: true`, the page's `url`, the file as `file_path`), then update the job to `status: "done"`, `assetId` set to the returned id, `model: "Claude Code"`, and a one-line `note` that includes any credit the assets need.
 4. If a step is blocked, update the job to `status: "failed"` with the reason in `note`, in words the person who typed the prompt can act on, and stop working on the queue.
 
 Pin every update with the `version` you last read.

@@ -1,9 +1,6 @@
 node_modules
 out
 .DS_Store
-.env
-# Holds your Respan key when Remocn Studio is routed through the gateway.
-.claude/settings.json
 
 # Reference clips used for motion analysis. They are other people's work.
 references/*.mp4
